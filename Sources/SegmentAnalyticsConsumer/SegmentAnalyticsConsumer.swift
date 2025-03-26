@@ -22,8 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
 
 import Segment
 import TAAnalytics
@@ -31,10 +29,9 @@ import TAAnalytics
 /// Sends messages to Segment about analytics events & user properties.
 public class SegmentAnalyticsConsumer: AnalyticsConsumer, AnalyticsConsumerWithWriteOnlyUserID {
 
-    public typealias T = SegmentAnalyticsConsumer
-
     private let enabledInstallTypes: [TAAnalyticsConfig.InstallType]
-    private let writeKey: String
+    private let sdkKey: String
+    private let isRedacted: Bool
 
     // MARK: AnalyticsConsumer
 
@@ -42,11 +39,13 @@ public class SegmentAnalyticsConsumer: AnalyticsConsumer, AnalyticsConsumerWithW
     ///   - isRedacted: If parameter & user property values should be redacted.
     ///   - enabledInstallTypes: Install types for which the consumer is enabled.
     init(
-        enabledInstallTypes: [TAAnalyticsConfig.InstallType],
-        writeKey: String
+        enabledInstallTypes: [TAAnalyticsConfig.InstallType] = TAAnalyticsConfig.InstallType.allCases,
+        sdkKey: String,
+        isRedacted: Bool = true
     ) {
         self.enabledInstallTypes = enabledInstallTypes
-        self.writeKey = writeKey
+        self.sdkKey = sdkKey
+        self.isRedacted = isRedacted
     }
 
     public func startFor(
@@ -58,52 +57,42 @@ public class SegmentAnalyticsConsumer: AnalyticsConsumer, AnalyticsConsumerWithW
             throw InstallTypeError.invalidInstallType
         }
 
-        Analytics.setup(with: AnalyticsConfiguration(writeKey: writeKey))
+        Analytics.setup(with: AnalyticsConfiguration(writeKey: sdkKey))
     }
 
-    public func track(trimmedEvent: TrimmedEvent, params: [String: AnalyticsBaseParameterValue]?) {
-        let event = trimmedEvent.event
-        
-        var properties = [String: Any]()
-        if let params = params {
-            for (key, value) in params {
-                properties[key] = value
-            }
-        }
-        
-        Analytics.shared().track(event.rawValue, properties: properties)
+    public func track(trimmedEvent: EventAnalyticsModelTrimmed, params: [String: any AnalyticsBaseParameterValue]?) {
+        let event = trimmedEvent.rawValue
+
+        let debugString = OSLogAnalyticsConsumer().debugStringForLog(eventRawValue: event, params: params, privacyRedacted: isRedacted)
+        Analytics.shared().track(event, properties: ["debug": debugString])
     }
 
-    public func set(trimmedUserProperty: TrimmedUserProperty, to: String?) {
-        let userPropertyKey = trimmedUserProperty.userProperty.rawValue
+    public func set(trimmedUserProperty: UserPropertyAnalyticsModelTrimmed, to value: String?) {
+        let userPropertyKey = trimmedUserProperty.rawValue
 
-        if let value = to {
-            // Setting user traits in Segment
+        let debugString = OSLogAnalyticsConsumer().debugStringForSet(userPropertyRawValue: userPropertyKey, to: value, privacyRedacted: isRedacted)
+        Analytics.shared().track("set_user_property", properties: ["debug": debugString])
+        if let value = value {
             Analytics.shared().identify(nil, traits: [userPropertyKey: value])
         }
     }
 
-    public func trim(event: AnalyticsEvent) -> TrimmedEvent {
-        // Segment doesn't have strict limits, but you can enforce your own limits for consistency
-        let trimmedEventName = event.rawValue.ob_trim(type: "event", toLength: 40)
-        return TrimmedEvent(trimmedEventName)
+    public func trim(event: EventAnalyticsModel) -> EventAnalyticsModelTrimmed {
+        return EventAnalyticsModelTrimmed(event.rawValue.ta_trim(toLength: 40, debugType: "event"))
     }
 
-    public func trim(userProperty: AnalyticsUserProperty) -> TrimmedUserProperty {
-        // Segment doesn't have strict limits on user property keys, but you might want to enforce one.
-        let trimmedUserPropertyKey = userProperty.rawValue.ob_trim(type: "user property", toLength: 40)
-        return TrimmedUserProperty(trimmedUserPropertyKey)
+    public func trim(userProperty: UserPropertyAnalyticsModel) -> UserPropertyAnalyticsModelTrimmed {
+        return UserPropertyAnalyticsModelTrimmed(userProperty.rawValue.ta_trim(toLength: 24, debugType: "user property"))
     }
 
-    public var wrappedValue: Self {
-        return self
+    public var wrappedValue: Analytics.Type {
+        Analytics.self
     }
 
     // MARK: AnalyticsConsumerWithWriteOnlyUserID
 
     public func set(userID: String?) {
         if let userID = userID {
-            // Set user ID in Segment
             Analytics.shared().identify(userID)
         }
     }
