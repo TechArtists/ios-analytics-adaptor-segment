@@ -27,13 +27,13 @@ import Segment
 import TAAnalytics
     
 /// Sends messages to Segment about analytics events & user properties.
-public class SegmentAnalyticsConsumer: AnalyticsConsumer, AnalyticsConsumerWithWriteOnlyUserID {
+public class SegmentAnalyticsAdaptor: AnalyticsAdaptor, AnalyticsAdaptorWithWriteOnlyUserID {
 
     private let enabledInstallTypes: [TAAnalyticsConfig.InstallType]
     private let sdkKey: String
     private let isRedacted: Bool
 
-    // MARK: AnalyticsConsumer
+    // MARK: AnalyticsAdaptor
 
     /// - Parameters:
     ///   - isRedacted: If parameter & user property values should be redacted.
@@ -63,14 +63,14 @@ public class SegmentAnalyticsConsumer: AnalyticsConsumer, AnalyticsConsumerWithW
     public func track(trimmedEvent: EventAnalyticsModelTrimmed, params: [String: any AnalyticsBaseParameterValue]?) {
         let event = trimmedEvent.rawValue
 
-        let debugString = OSLogAnalyticsConsumer().debugStringForLog(eventRawValue: event, params: params, privacyRedacted: isRedacted)
+        let debugString = OSLogAnalyticsAdaptor().debugStringForLog(eventRawValue: event, params: params, privacyRedacted: isRedacted)
         Analytics.shared().track(event, properties: ["debug": debugString])
     }
 
     public func set(trimmedUserProperty: UserPropertyAnalyticsModelTrimmed, to value: String?) {
         let userPropertyKey = trimmedUserProperty.rawValue
 
-        let debugString = OSLogAnalyticsConsumer().debugStringForSet(userPropertyRawValue: userPropertyKey, to: value, privacyRedacted: isRedacted)
+        let debugString = OSLogAnalyticsAdaptor().debugStringForSet(userPropertyRawValue: userPropertyKey, to: value, privacyRedacted: isRedacted)
         Analytics.shared().track("set_user_property", properties: ["debug": debugString])
         if let value = value {
             Analytics.shared().identify(nil, traits: [userPropertyKey: value])
@@ -89,7 +89,7 @@ public class SegmentAnalyticsConsumer: AnalyticsConsumer, AnalyticsConsumerWithW
         Analytics.self
     }
 
-    // MARK: AnalyticsConsumerWithWriteOnlyUserID
+    // MARK: AnalyticsAdaptorWithWriteOnlyUserID
 
     public func set(userID: String?) {
         if let userID = userID {
